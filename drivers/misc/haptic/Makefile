@@ -5,5 +5,8 @@
 
 # Each configuration option enables a list of files.
 
-obj-$(CONFIG_ICS_HAPTIC_DRV)		+= hapticdrv.o
-hapticdrv-objs						:= haptic_drv.o rt6010.o haptic_util.o richtap_drv.o sfdc_drv.o
+obj-$(CONFIG_ICS_HAPTIC_DRV) += hapticdrv.o
+
+hapticdrv-objs := haptic_drv.o rt6010.o haptic_util.o sfdc_drv.o
+
+hapticdrv-$(CONFIG_ICS_HAPTIC_DRV_RICHTAP) += richtap_drv.o
