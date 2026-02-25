@@ -1204,7 +1204,7 @@ static ssize_t aw20036_hwid_store(struct device *dev,
 	//struct led_classdev *led_cdev = dev_get_drvdata(dev);
 	//struct aw20036 *aw20036 = container_of(led_cdev, struct aw20036, cdev);
 
-	pr_info("%s %s %d\n", __func__, buf, len);
+	pr_info("%s %s %zu\n", __func__, buf, len);
 
 	if(len > sizeof(hw_ver)){
 		pr_info("%s: invalid hwid \n", __func__);
@@ -1252,7 +1252,7 @@ static ssize_t aw20036_dev_color_store(struct device *dev,
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
 	struct aw20036 *aw20036 = container_of(led_cdev, struct aw20036, cdev);
 
-	pr_info("%s %s %d\n", __func__, buf, len);
+	pr_info("%s %s %zu\n", __func__, buf, len);
 
 	if(len > sizeof(dev_color)){
 		pr_info("%s: invalid hwid \n", __func__);
@@ -1945,7 +1945,7 @@ static int aw20036_mmap(struct file *filp, struct vm_area_struct *vma)
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0)
 	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) |
-			      calc_vm_flag_bits(MAP_SHARED);
+			      calc_vm_flag_bits(filp, MAP_SHARED);
 
 	vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE |
 		    VM_MAYEXEC | VM_SHARED | VM_MAYSHARE;
