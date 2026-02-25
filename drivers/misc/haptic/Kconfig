@@ -12,5 +12,10 @@ config ICS_HAPTIC_DRV
 	  To compile this driver as a module, choose M here: the
 	  module will be called aac_haptic_drv.
 
+config ICS_HAPTIC_DRV_RICHTAP
+    bool "Enable Richtap support"
+    depends on ICS_HAPTIC_DRV
+	default n
+
 
 
