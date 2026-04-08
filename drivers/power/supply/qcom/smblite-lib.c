@@ -1116,6 +1116,12 @@ int smblite_lib_get_prop_batt_status(struct smb_charger *chg,
 	if (val->intval != POWER_SUPPLY_STATUS_CHARGING)
 		return 0;
 
+	rc = smblite_lib_get_prop_usb_present(chg, &pval);
+	if (rc >= 0 && !pval.intval) {
+		val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		return 0;
+	}
+
 	if (!usb_online
 		&& chg->fake_batt_status == POWER_SUPPLY_STATUS_FULL) {
 		val->intval = POWER_SUPPLY_STATUS_FULL;
@@ -1151,6 +1157,15 @@ int smblite_lib_get_prop_batt_charge_type(struct smb_charger *chg,
 		break;
 	default:
 		val->intval = POWER_SUPPLY_CHARGE_TYPE_NONE;
+	}
+	{
+		int usb_present = 0;
+		union power_supply_propval pval = {0,};
+		rc = smblite_lib_get_prop_usb_present(chg, &pval);
+		if (rc >= 0 && !pval.intval) {
+			val->intval = POWER_SUPPLY_CHARGE_TYPE_NONE;
+			return 0;
+		}
 	}
 
 	return rc;
