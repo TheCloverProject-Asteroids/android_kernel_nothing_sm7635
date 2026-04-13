@@ -1955,6 +1955,14 @@ int smblite_lib_get_prop_usb_online(struct smb_charger *chg,
 
 	val->intval = (stat & USE_USBIN_BIT) &&
 		      (stat & VALID_INPUT_POWER_SOURCE_STS_BIT);
+
+	// The Nothing proprietary blob freezes the POWER_PATH_STATUS_REG
+	// and prevents real_charger_type from resetting to UNKNOWN.
+	// Force the online state to false if physical input is gone.
+	if (!input_present) {
+		val->intval = false;
+	}
+
 	return rc;
 }
 
