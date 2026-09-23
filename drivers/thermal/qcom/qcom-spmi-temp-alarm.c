@@ -394,7 +394,7 @@ static int qpnp_tm_update_critical_trip_temp(struct qpnp_tm_chip *chip,
 	WARN_ON(!mutex_is_locked(&chip->lock));
 
 	/*
-	 * Default: Stage 2 and Stage 3 shutdown enabled, thresholds at
+	 * Default: S2 and S3 shutdown enabled, thresholds at
 	 * lowest threshold set, monitoring at 25Hz
 	 */
 	reg = SHUTDOWN_CTRL1_RATE_25HZ;
@@ -774,6 +774,19 @@ static int qpnp_tm_probe(struct platform_device *pdev)
 	else if (subtype == QPNP_TM_SUBTYPE_GEN1)
 		chip->temp_map = &temp_map_gen1;
 
+	if (chip->has_temp_dac) {
+		ops = &qpnp_tm_sensor_temp_dac_ops;
+		ret = qpnp_tm_temp_dac_init(chip);
+		if (ret < 0)
+			return ret;
+	}
+
+	if (chip->subtype == QPNP_TM_SUBTYPE_LITE) {
+		ops = &qpnp_tm_sensor_temp_lite_ops;
+		ret = qpnp_tm_temp_lite_init(chip);
+		if (ret < 0)
+			return ret;
+	}
 	if (chip->subtype == QPNP_TM_SUBTYPE_GEN2) {
 		dig_revision = (dig_major << 8) | dig_minor;
 		/*
@@ -789,20 +802,6 @@ static int qpnp_tm_probe(struct platform_device *pdev)
 			chip->require_stage2_shutdown = true;
 			break;
 		}
-	}
-
-	if (chip->has_temp_dac) {
-		ops = &qpnp_tm_sensor_temp_dac_ops;
-		ret = qpnp_tm_temp_dac_init(chip);
-		if (ret < 0)
-			return ret;
-	}
-
-	if (chip->subtype == QPNP_TM_SUBTYPE_LITE) {
-		ops = &qpnp_tm_sensor_temp_lite_ops;
-		ret = qpnp_tm_temp_lite_init(chip);
-		if (ret < 0)
-			return ret;
 	}
 
 	/*

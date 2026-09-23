@@ -1297,4 +1297,13 @@ config NT_TOUCH_NOTIFIER
 	  Enabling this option adds nt TP fod event notifier driver.
 	  This driver is responsible for notifying clients, such as fingerprint.
 
+config QTI_CRYPTO_FDE
+        tristate "Enable common crypto functionality used for FDE"
+        default n
+        help
+          Say 'Y' to enable the common crypto implementation to be used by
+          different storage layers such as UFS and EMMC for full disk hardware
+          encryption. this is control only for enable inline crypto engine for Full
+          Disk Encryption.
+
 endmenu

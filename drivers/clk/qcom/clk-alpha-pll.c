@@ -1977,6 +1977,7 @@ clk_trion_pll_postdiv_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 		return -EINVAL;
 	}
 
+	regmap_read(regmap, PLL_USER_CTL(pll), &val);
 	if (regmap_read(regmap, PLL_USER_CTL(pll), &val))
 		return 0;
 
