@@ -43,6 +43,19 @@ if test $# -gt 0; then
 		shift
 	fi
 fi
+
+# Fall back to build.config files if not passed via arguments
+if [ -z "$android_release" ] && [ -f "$srctree/build.config.constants" ]; then
+	branch_from_config=$(sed -n -e 's/^BRANCH=\(.*\)$/\1/p' "$srctree/build.config.constants")
+	android_release=$(echo "$branch_from_config" | sed -e '/android[0-9]\{2,\}/!{q255}; s/^\(android[0-9]\{2,\}\)-.*/\1/')
+	if [ $? -ne 0 ]; then
+		android_release=
+	fi
+fi
+if [ -z "$kmi_generation" ] && [ -f "$srctree/build.config.common" ]; then
+	kmi_generation=$(sed -n -e 's/^KMI_GENERATION=\(.*\)$/\1/p' "$srctree/build.config.common")
+fi
+
 if test $# -gt 0 -o ! -d "$srctree"; then
 	usage
 fi
@@ -64,10 +77,12 @@ scm_version()
 	# Check for git and a git repo.
 	if head=$(git rev-parse --verify HEAD 2>/dev/null); then
 
-		if [ -n "$android_release" ] && [ -n "$kmi_generation" ]; then
-			printf '%s' "-$android_release-$kmi_generation"
-		elif [ -n "$android_release" ]; then
-			printf '%s' "-$android_release"
+		if [ -n "$android_release" ] && ! echo "$res" | grep -q -- "$android_release"; then
+			if [ -n "$kmi_generation" ]; then
+				printf '%s' "-$android_release-$kmi_generation"
+			else
+				printf '%s' "-$android_release"
+			fi
 		fi
 
 		# If we are at a tagged commit (like "v2.6.30-rc6"), we ignore
