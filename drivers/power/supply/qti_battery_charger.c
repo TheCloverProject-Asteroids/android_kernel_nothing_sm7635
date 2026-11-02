@@ -200,6 +200,7 @@ enum battery_property_id {
 	BATT_FAKE_SOC,
 	BATT_SHUT_DOWN,
 	BATT_ID,
+	BATT_FAKE_CYCLECOUNT,
 #endif
 	BATT_PROP_MAX,
 };
@@ -2510,6 +2511,62 @@ static int nt_battid_open(struct inode *inode, struct file *file)
 	return single_open(file, nt_battid_show, pde_data(inode));
 }
 
+static int nt_fake_cyclecount_show(struct seq_file *m, void *v)
+{
+	struct battery_chg_dev *bcdev = m->private;
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
+	int rc;
+	if ((pst == NULL) || (bcdev == NULL))
+		return -EINVAL;
+
+	rc = read_property_id(bcdev, pst, BATT_FAKE_CYCLECOUNT);
+	if (rc < 0)
+		return rc;
+	seq_printf(m, "%d\n", pst->prop[BATT_FAKE_CYCLECOUNT]);
+	return 0;
+}
+
+static int nt_fake_cyclecount_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nt_fake_cyclecount_show, pde_data(inode));
+}
+
+static ssize_t nt_fake_cyclecount_write(struct file *file, const char __user *buff,
+               size_t count, loff_t *ppos)
+{
+	struct battery_chg_dev *bcdev = pde_data(file_inode(file));
+	u8 *buf_tmp = NULL;
+	int buflen = count;
+	u32 val;
+	if (bcdev == NULL)
+		return -EINVAL;
+
+	if (buflen < 0) {
+		pr_err("proc count fail:%d\n", buflen);
+		return -EINVAL;
+	} else {
+		buf_tmp = (u8 *)kzalloc((buflen + 1) * sizeof(u8), GFP_KERNEL);
+		if (buf_tmp == NULL) {
+			pr_err("proc write buf zalloc fail\n");
+			return -ENOMEM;
+		}
+	}
+
+	if (copy_from_user(buf_tmp, buff, buflen)) {
+		pr_err("proc nt_otg_enable fail\n");
+		goto exit;
+	}
+
+	if (kstrtou32(buf_tmp, 0, &val))
+		goto exit;
+	write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_BATTERY],
+				BATT_FAKE_CYCLECOUNT, val);
+exit:
+	kfree(buf_tmp);
+	buf_tmp = NULL;
+	return buflen;
+}
+
 const struct nt_proc entries[] = {
 	{"battery_health",{.proc_open = battery_health_open,
                       .proc_read = seq_read,
@@ -2686,6 +2743,12 @@ const struct nt_proc entries[] = {
 	                  .proc_read = seq_read,
 	                  .proc_lseek = seq_lseek,
 	                  .proc_release = single_release,}
+	},
+	{"nt_fake_cycle",{.proc_open = nt_fake_cyclecount_open,
+	                  .proc_read = seq_read,
+	                  .proc_lseek = seq_lseek,
+	                  .proc_release = single_release,
+	                  .proc_write = nt_fake_cyclecount_write,}
 	}
 };
 #endif
