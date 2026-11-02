@@ -2232,6 +2232,8 @@ static void aw20036_i2c_remove(struct i2c_client *i2c)
 	struct aw20036 *aw20036 = i2c_get_clientdata(i2c);
 
 	pr_info("%s enter\n", __func__);
+	cancel_work_sync(&aw20036->vip_notification_work);
+	cancel_work_sync(&aw20036->leds_effect_work);
 	sysfs_remove_group(&aw20036->cdev.dev->kobj, &aw20036_attribute_group);
 	led_classdev_unregister(&aw20036->cdev);
 
