@@ -15,12 +15,30 @@
 
 char *bootloader_log_buf;
 unsigned long bootloader_log_buf_len;
+unsigned long mem_size1, mem_size2;
 
 static int bootloader_logger_proc_show(struct seq_file *m, void *v)
 {
-	bootloader_log_buf[bootloader_log_buf_len-1] = '\0';
-	seq_printf(m, "%s\n", bootloader_log_buf);
-	return 0;
+    unsigned long i, end_xbl = mem_size1;
+
+    /* found xbl_log first `'\0'` as the end of xbl+log */
+    for (i = 0; i < mem_size1; i++) {
+        if (bootloader_log_buf[i] == '\0') {
+            end_xbl = i;
+            break;
+        }
+    }
+
+    /* Only show xbl_log until first '\0' */
+    seq_write(m, bootloader_log_buf, end_xbl);
+
+    /* Insert new '\n', seprate xbl_log and uefi_log */
+    seq_putc(m, '\n');
+
+    /* show uefi_log continue */
+    seq_write(m, bootloader_log_buf + mem_size1, mem_size2);
+
+    return 0;
 }
 
 static int bootloader_logger_proc_open(struct inode *inode, struct file *file)
@@ -43,55 +61,89 @@ static int bootloader_logger_proc_init(void)
 
 static int bootloader_logger_probe(struct platform_device *pdev)
 {
-	struct resource res;
-	struct device_node *np;
-	phys_addr_t phys_addr;
-	char* virt_addr;
-	unsigned long mem_size;
+	struct resource res, res2;
+	struct device_node *np, *np2;
+	phys_addr_t phys_addr, phys_addr2 = 0;
+	char *virt_addr, *virt_addr2 = NULL;
 	int rc;
-	u32 log_offset_size[2];
 
-	pr_warn("[%s]: Enterd\n", __func__);
+	pr_warn("[%s]: Entered\n", __func__);
 
-	if(pdev->dev.of_node) {
+	if (pdev->dev.of_node) {
+		/* first memory-region */
 		np = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
 		if (!np) {
-			pr_err("[%s]: no memory-region node\n", __func__);
+			pr_err("[%s]: no memory-region node for region 0\n", __func__);
 			goto err;
 		}
 		rc = of_address_to_resource(np, 0, &res);
 		if (rc) {
-			pr_err("[%s]: failed to get reserve-memory resource\n", __func__);
+			pr_err("[%s]: failed to get reserve-memory resource for region 0\n", __func__);
+			of_node_put(np);
 			goto err;
 		}
 		of_node_put(np);
+		phys_addr = res.start;
+		mem_size1 = resource_size(&res);
 
-
-		rc = of_property_read_u32_array(pdev->dev.of_node, "log,offset_size", log_offset_size, 2);
-		if (rc < 0) {
-			pr_err("[%s]: Cannot get log,offset_size resource, directly use memory-region\n", __func__);
-			mem_size = resource_size(&res);
-			phys_addr = res.start;
+		/* second memory-region */
+		np2 = of_parse_phandle(pdev->dev.of_node, "memory-region", 1);
+		if (np2) {
+			rc = of_address_to_resource(np2, 0, &res2);
+			if (rc) {
+				pr_err("[%s]: failed to get reserve-memory resource for region 1\n", __func__);
+				of_node_put(np2);
+				mem_size2 = 0;
+			} else {
+				of_node_put(np2);
+				mem_size2 = resource_size(&res2);
+				phys_addr2 = res2.start;
+			}
+		} else {
+			mem_size2 = 0;
 		}
-		else {
-			// base address of reserved_xbl_uefi + offset
-			pr_err("[%s]: Get log offset = %x\n", __func__, log_offset_size[0]);
-			phys_addr = res.start + log_offset_size[0];
-			mem_size = log_offset_size[1];
-		}
 
-		virt_addr = ioremap(phys_addr, mem_size);
-		bootloader_log_buf = kzalloc(mem_size, GFP_KERNEL);
-		if(!bootloader_log_buf) {
-			pr_err("[%s]: failed to alloc bootloader_log_buf\n",__func__);
+		/* ioremap or first memory-region */
+		virt_addr = ioremap(phys_addr, mem_size1);
+		if (!virt_addr) {
+			pr_err("[%s]: ioremap failed for region 0\n", __func__);
 			return -ENOMEM;
 		}
-		bootloader_log_buf_len = mem_size;
-		memcpy(bootloader_log_buf, virt_addr, mem_size);
+
+		/* ioremap or second memory-region (if exist) */
+		if (mem_size2 > 0) {
+			virt_addr2 = ioremap(phys_addr2, mem_size2);
+			if (!virt_addr2) {
+				pr_err("[%s]: ioremap failed for region 1\n", __func__);
+				iounmap(virt_addr);
+				return -ENOMEM;
+			}
+		}
+
+		/* memory allocate for bootloader log size */
+		bootloader_log_buf_len = mem_size1 + mem_size2;
+		bootloader_log_buf = kzalloc(bootloader_log_buf_len, GFP_KERNEL);
+		if (!bootloader_log_buf) {
+			pr_err("[%s]: failed to allocate bootloader_log_buf\n", __func__);
+			iounmap(virt_addr);
+			if (virt_addr2)
+				iounmap(virt_addr2);
+			return -ENOMEM;
+		}
+
+		/* copy first memory-region */
+		memcpy(bootloader_log_buf, virt_addr, mem_size1);
+		/* copy second memory-region（if exist） */
+		if (virt_addr2 && mem_size2 > 0)
+			memcpy(bootloader_log_buf + mem_size1, virt_addr2, mem_size2);
+
+		iounmap(virt_addr);
+		if (virt_addr2)
+			iounmap(virt_addr2);
 
 		bootloader_logger_proc_init();
 	}
-	pr_warn("[%s]: End\n", __func__);
+	pr_warn("[%s]: End total bootloader log length = %lu\n", __func__, bootloader_log_buf_len);
 	return 0;
 err:
 	return -ENOMEM;
