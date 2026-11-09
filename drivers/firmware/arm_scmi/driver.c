@@ -2139,7 +2139,7 @@ static int scmi_chan_setup(struct scmi_info *info, struct device_node *of_node,
 
 	cinfo->rx_timeout_ms = info->desc->max_rx_timeout_ms;
 
-	ret = of_property_read_u32(info->dev->of_node, "arm,max-rx-timeout-ms",
+	ret = of_property_read_u32(of_node, "arm,max-rx-timeout-ms",
 				   &cinfo->rx_timeout_ms);
 	if (ret && ret != -EINVAL)
 		dev_err(info->dev, "Malformed arm,max-rx-timeout-ms DT property.\n");
