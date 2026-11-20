@@ -189,7 +189,6 @@ struct qcom_adsp {
 	bool crash_irq;
 };
 
-
 static int setup_global_sync_mem(struct qcom_adsp *adsp);
 
 static ssize_t txn_id_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -254,7 +253,7 @@ custom_segment_dump:
 }
 
 void adsp_segment_dump(struct rproc *rproc, struct rproc_dump_segment *segment,
-		     void *dest, size_t offset, size_t size)
+		       void *dest, size_t offset, size_t size)
 {
 	struct qcom_adsp *adsp = rproc->priv;
 	int total_offset;
