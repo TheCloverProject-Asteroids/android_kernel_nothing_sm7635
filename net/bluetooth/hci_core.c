@@ -1176,16 +1176,16 @@ struct smp_ltk *hci_find_ltk(struct hci_dev *hdev, bdaddr_t *bdaddr,
 			continue;
 
 		if (smp_ltk_is_sc(k) || ltk_role(k->type) == role) {
-			rcu_read_unlock();
-
 			if (hci_is_blocked_key(hdev, HCI_BLOCKED_KEY_TYPE_LTK,
 					       k->val)) {
 				bt_dev_warn_ratelimited(hdev,
 							"LTK blocked for %pMR",
 							&k->bdaddr);
+				rcu_read_unlock();
 				return NULL;
 			}
 
+			rcu_read_unlock();
 			return k;
 		}
 	}
@@ -2668,10 +2668,10 @@ int hci_register_dev(struct hci_dev *hdev)
 	if (error)
 		BT_WARN("register suspend notifier failed error:%d\n", error);
 
-	queue_work(hdev->req_workqueue, &hdev->power_on);
-
 	idr_init(&hdev->adv_monitors_idr);
 	msft_register(hdev);
+
+	queue_work(hdev->req_workqueue, &hdev->power_on);
 
 	return id;
 
@@ -3377,9 +3377,6 @@ static struct hci_conn *hci_low_sent(struct hci_dev *hdev, __u8 type,
 	struct hci_conn *conn = NULL, *c;
 	unsigned int num = 0, min = ~0;
 
-	/* We don't have to lock device here. Connections are always
-	 * added and removed with TX task disabled. */
-
 	rcu_read_lock();
 
 	list_for_each_entry_rcu(c, &h->list, list) {
@@ -3572,11 +3569,13 @@ static void __check_timeout(struct hci_dev *hdev, unsigned int cnt, u8 type)
 }
 
 /* Schedule SCO */
-static void hci_sched_sco(struct hci_dev *hdev)
+static void __hci_sched_sco(struct hci_dev *hdev)
 {
 	struct hci_conn *conn;
 	struct sk_buff *skb;
 	int quote;
+
+	lockdep_assert_held(&hdev->lock);
 
 	BT_DBG("%s", hdev->name);
 
@@ -3595,11 +3594,20 @@ static void hci_sched_sco(struct hci_dev *hdev)
 	}
 }
 
-static void hci_sched_esco(struct hci_dev *hdev)
+static void hci_sched_sco(struct hci_dev *hdev)
+{
+	hci_dev_lock(hdev);
+	__hci_sched_sco(hdev);
+	hci_dev_unlock(hdev);
+}
+
+static void __hci_sched_esco(struct hci_dev *hdev)
 {
 	struct hci_conn *conn;
 	struct sk_buff *skb;
 	int quote;
+
+	lockdep_assert_held(&hdev->lock);
 
 	BT_DBG("%s", hdev->name);
 
@@ -3617,6 +3625,13 @@ static void hci_sched_esco(struct hci_dev *hdev)
 				conn->sent = 0;
 		}
 	}
+}
+
+static void hci_sched_esco(struct hci_dev *hdev)
+{
+	hci_dev_lock(hdev);
+	__hci_sched_esco(hdev);
+	hci_dev_unlock(hdev);
 }
 
 static void hci_sched_acl_pkt(struct hci_dev *hdev)
@@ -3654,8 +3669,8 @@ static void hci_sched_acl_pkt(struct hci_dev *hdev)
 			chan->conn->sent++;
 
 			/* Send pending SCO packets right away */
-			hci_sched_sco(hdev);
-			hci_sched_esco(hdev);
+			__hci_sched_sco(hdev);
+			__hci_sched_esco(hdev);
 		}
 	}
 
@@ -3780,8 +3795,8 @@ static void hci_sched_le(struct hci_dev *hdev)
 			chan->conn->sent++;
 
 			/* Send pending SCO packets right away */
-			hci_sched_sco(hdev);
-			hci_sched_esco(hdev);
+			__hci_sched_sco(hdev);
+			__hci_sched_esco(hdev);
 		}
 	}
 
@@ -3805,6 +3820,9 @@ static void hci_sched_iso(struct hci_dev *hdev)
 
 	cnt = hdev->iso_pkts ? &hdev->iso_cnt :
 		hdev->le_pkts ? &hdev->le_cnt : &hdev->acl_cnt;
+
+	hci_dev_lock(hdev);
+
 	while (*cnt && (conn = hci_low_sent(hdev, ISO_LINK, &quote))) {
 		while (quote-- && (skb = skb_dequeue(&conn->data_q))) {
 			BT_DBG("skb %p len %d", skb, skb->len);
@@ -3816,6 +3834,8 @@ static void hci_sched_iso(struct hci_dev *hdev)
 			(*cnt)--;
 		}
 	}
+
+	hci_dev_unlock(hdev);
 }
 
 static void hci_tx_work(struct work_struct *work)
